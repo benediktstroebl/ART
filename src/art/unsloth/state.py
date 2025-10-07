@@ -76,8 +76,17 @@ class ModelState:
         def _from_engine_args(
             engine_args: AsyncEngineArgs, *args: Any, **kwargs: Any
         ) -> AsyncLLMEngine:
+            # Handle vLLM 0.10.x API changes
+            engine_args_dict = config.get("engine_args", {}).copy()
+
+            # Convert disable_log_requests (old) to enable_log_requests (new)
+            if "disable_log_requests" in engine_args_dict:
+                engine_args_dict["enable_log_requests"] = not engine_args_dict.pop(
+                    "disable_log_requests"
+                )
+
             return from_engine_args(
-                replace(engine_args, **config.get("engine_args", {})), *args, **kwargs
+                replace(engine_args, **engine_args_dict), *args, **kwargs
             )
 
         AsyncLLMEngine.from_engine_args = _from_engine_args
