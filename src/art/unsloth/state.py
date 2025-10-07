@@ -17,8 +17,13 @@ from transformers.utils.dummy_pt_objects import (
 from trl import GRPOConfig, GRPOTrainer
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.engine.async_llm_engine import AsyncLLMEngine
-from vllm.worker.multi_step_model_runner import MultiStepModelRunner
 from vllm.worker.worker_base import WorkerWrapperBase
+
+try:
+    from vllm.worker.multi_step_model_runner import MultiStepModelRunner
+except ImportError:
+    # MultiStepModelRunner was removed in vLLM 0.10.x
+    MultiStepModelRunner = None  # type: ignore
 
 from ..dev.model import InternalModelConfig
 from .train import gc_and_empty_cuda_cache
@@ -41,8 +46,8 @@ class ModelState:
     def __init__(self, config: InternalModelConfig) -> None:
         from vllm.engine import async_llm_engine
 
-        # Patch MultiStepModelRunner for Unsloth compatibility
-        if not hasattr(MultiStepModelRunner, "model"):
+        # Patch MultiStepModelRunner for Unsloth compatibility (vLLM < 0.10.x)
+        if MultiStepModelRunner is not None and not hasattr(MultiStepModelRunner, "model"):
             MultiStepModelRunner.model = property(  # type: ignore
                 lambda self: self._base_model_runner.model
             )
@@ -143,7 +148,10 @@ class vLLMState:
             "WorkerWrapperBase",
             getattr(self.async_engine.engine.model_executor, "driver_worker"),
         )
-        if isinstance(self.driver_worker.model_runner, MultiStepModelRunner):
+        # Patch MultiStepModelRunner if it exists (vLLM < 0.10.x)
+        if MultiStepModelRunner is not None and isinstance(
+            self.driver_worker.model_runner, MultiStepModelRunner
+        ):
             patch_multi_step_model_runner(self.driver_worker.model_runner)
 
     @asynccontextmanager
