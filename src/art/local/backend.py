@@ -312,24 +312,24 @@ class LocalBackend(Backend):
                     elif line.startswith("vllm:num_requests_waiting"):
                         pending_requests = int(float(line.split()[1]))
                 # If there are no running or pending requests, send a health check
-                if running_requests == 0 and pending_requests == 0:
-                    try:
-                        # Send a health check with a 5 second timeout
-                        timeout = float(
-                            os.environ.get("ART_SERVER_MONITOR_TIMEOUT", 5.0)
-                        )
-                        # Send a health check with a 5 second timeout
-                        await openai_client.models.retrieve(
-                            model=model_name,
-                            timeout=timeout,
-                        )
-                        # get the completion response, exit the loop
-                        break
-                    except Exception as e:
-                        # If the server is sleeping, a failed health check is okay
-                        if await self._services[model_name].vllm_engine_is_sleeping():
-                            continue
-                        raise e
+                # if running_requests == 0 and pending_requests == 0:
+                #     try:
+                #         # Send a health check with a 5 second timeout
+                #         timeout = float(
+                #             os.environ.get("ART_SERVER_MONITOR_TIMEOUT", 5.0)
+                #         )
+                #         # Send a health check with a 5 second timeout
+                #         await openai_client.models.retrieve(
+                #             model=model_name,
+                #             timeout=timeout,
+                #         )
+                #         # Health check passed, continue monitoring
+                #         # break
+                #     except Exception as e:
+                #         # If the server is sleeping, a failed health check is okay
+                #         if await self._services[model_name].vllm_engine_is_sleeping():
+                #             continue
+                #         raise e
 
     async def _log(
         self,
