@@ -303,43 +303,50 @@ class LocalBackend(Backend):
         )
         async with aiohttp.ClientSession() as session:
             while True:
-                # Wait 30 seconds before checking again
-                await asyncio.sleep(30)
-                # If the server is sleeping, skip the check
-                if await self._services[model_name].vllm_engine_is_sleeping():
+                try:
+                    # Wait 30 seconds before checking again
+                    await asyncio.sleep(30)
+                    # If the server is sleeping, skip the check
+                    if await self._services[model_name].vllm_engine_is_sleeping():
+                        continue
+                    # Check the metrics
+                    async with session.get(
+                        f"{base_url.split('/v1')[0]}/metrics"
+                    ) as response:
+                        metrics = await response.text()
+                    # Parse Prometheus metrics for running requests
+                    running_requests = 0
+                    pending_requests = 0
+                    for line in metrics.split("\n"):
+                        if line.startswith("vllm:num_requests_running"):
+                            running_requests = int(float(line.split()[1]))
+                        elif line.startswith("vllm:num_requests_waiting"):
+                            pending_requests = int(float(line.split()[1]))
+                    # If there are no running or pending requests, send a health check
+                    # if running_requests == 0 and pending_requests == 0:
+                    #     try:
+                    #         # Send a health check with a 5 second timeout
+                    #         timeout = float(
+                    #             os.environ.get("ART_SERVER_MONITOR_TIMEOUT", 5.0)
+                    #         )
+                    #         # Send a health check with a 5 second timeout
+                    #         await openai_client.models.retrieve(
+                    #             model=model_name,
+                    #             timeout=timeout,
+                    #         )
+                    #         # Health check passed, continue monitoring
+                    #         # break
+                    #     except Exception as e:
+                    #         # If the server is sleeping, a failed health check is okay
+                    #         if await self._services[model_name].vllm_engine_is_sleeping():
+                    #             continue
+                    #         raise e
+                except Exception as e:
+                    # Log the exception but don't let it kill the monitoring task
+                    # This prevents the done_callback from being triggered on transient errors
+                    print(f"Warning: Error in vLLM server monitoring for {model_name}: {e}")
+                    # Continue monitoring despite the error
                     continue
-                # Check the metrics
-                async with session.get(
-                    f"{base_url.split('/v1')[0]}/metrics"
-                ) as response:
-                    metrics = await response.text()
-                # Parse Prometheus metrics for running requests
-                running_requests = 0
-                pending_requests = 0
-                for line in metrics.split("\n"):
-                    if line.startswith("vllm:num_requests_running"):
-                        running_requests = int(float(line.split()[1]))
-                    elif line.startswith("vllm:num_requests_waiting"):
-                        pending_requests = int(float(line.split()[1]))
-                # If there are no running or pending requests, send a health check
-                # if running_requests == 0 and pending_requests == 0:
-                #     try:
-                #         # Send a health check with a 5 second timeout
-                #         timeout = float(
-                #             os.environ.get("ART_SERVER_MONITOR_TIMEOUT", 5.0)
-                #         )
-                #         # Send a health check with a 5 second timeout
-                #         await openai_client.models.retrieve(
-                #             model=model_name,
-                #             timeout=timeout,
-                #         )
-                #         # Health check passed, continue monitoring
-                #         # break
-                #     except Exception as e:
-                #         # If the server is sleeping, a failed health check is okay
-                #         if await self._services[model_name].vllm_engine_is_sleeping():
-                #             continue
-                #         raise e
 
     async def _log(
         self,
